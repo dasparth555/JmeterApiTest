@@ -1,0 +1,66 @@
+name: JMeter with S3 CSV
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch that contains Api.jmx'
+        required: true
+        default: 'Jmeter_S3download'
+
+env:
+  S3_BUCKET: parth-jmeter-data-2026
+  AWS_REGION: ap-southeast-2
+  JMETER_VERSION: '5.6.3'
+
+jobs:
+  jmeter:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout JMeter script branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Download CSV from S3
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          rm -f post_ids.csv
+          aws s3 cp s3://$S3_BUCKET/post_ids.csv post_ids.csv --region $AWS_REGION
+          test -s post_ids.csv
+          echo "CSV lines (including header): $(wc -l < post_ids.csv)"
+          echo "postId values used by JMeter:"
+          tail -n +2 post_ids.csv
+
+      - name: Download JMeter
+        run: |
+          curl -fsSL -o jmeter.tgz https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-${JMETER_VERSION}.tgz
+          tar -xzf jmeter.tgz
+
+      - name: Run JMeter test
+        run: |
+          rm -rf results.jtl report
+          apache-jmeter-${JMETER_VERSION}/bin/jmeter -n -t Api.jmx -l results.jtl -e -o report
+
+      - name: Upload HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jmeter-html-report
+          path: report/
+
+      - name: Upload raw results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jmeter-results-jtl
+          path: results.jtl
