@@ -3,9 +3,7 @@ name: JMeter Test
 on:
   workflow_dispatch:
 
-jobs:
-  jmeter:
-    runs-on: ubuntu-latest
+j
 
     steps:
       - name: Checkout repo
